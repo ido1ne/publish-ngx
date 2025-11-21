@@ -1,6 +1,35 @@
 # syntax=docker/dockerfile:1
 # https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/reference.md
 
+# Stage: compile-frontend-public
+# Purpose: Compiles the frontend-public
+# Notes:
+#  - Does PNPM stuff with Typescript and such
+FROM --platform=$BUILDPLATFORM docker.io/node:20-bookworm-slim AS compile-frontend-public
+
+COPY ./src-ui-public /src/src-ui-public
+
+WORKDIR /src/src-ui-public
+# Set CI environment variable
+ENV CI=true
+RUN set -eux \
+  && npm update -g pnpm \
+  && npm install -g corepack@latest \
+  && corepack enable \
+  && pnpm install
+
+ARG PNGX_TAG_VERSION=
+# Add the tag to the environment file if its a tagged dev build
+RUN set -eux && \
+case "${PNGX_TAG_VERSION}" in \
+  dev|beta|fix*|feature*) \
+    sed -i -E "s/tag: '([a-z\.]+)'/tag: '${PNGX_TAG_VERSION}'/g" /src/src-ui-public/src/environments/environment.prod.ts \
+    ;; \
+esac
+
+RUN set -eux \
+  && ./node_modules/.bin/ng build --configuration production
+
 # Stage: compile-frontend
 # Purpose: Compiles the frontend
 # Notes:
@@ -32,7 +61,7 @@ RUN set -eux \
 # Purpose: Installs s6-overlay and rootfs
 # Comments:
 #  - Don't leave anything extra in here either
-FROM ghcr.io/astral-sh/uv:0.9.9-python3.12-bookworm-slim AS s6-overlay-base
+FROM ghcr.io/astral-sh/uv:0.8.17-python3.12-bookworm-slim AS s6-overlay-base
 
 WORKDIR /usr/src/s6
 
@@ -235,6 +264,8 @@ COPY --chown=1000:1000 ./src ./
 
 # copy frontend
 COPY --from=compile-frontend --chown=1000:1000 /src/src/documents/static/frontend/ ./documents/static/frontend/
+# copy frontend-public
+COPY --from=compile-frontend-public --chown=1000:1000 /src/src/documents/static/frontend-public/ ./documents/static/frontend-public/
 
 # add users, setup scripts
 # Mount the compiled frontend to expected location

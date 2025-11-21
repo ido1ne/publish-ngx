@@ -1,0 +1,14 @@
+const base_url = new URL(document.baseURI)
+
+export const environment = {
+  production: true,
+  apiBaseUrl: document.baseURI + 'api/public/',
+  //baseUrl: '/public/',
+  apiVersion: '9', // match src/paperless/settings.py
+  appTitle: 'Paperless-idoine-prod',
+  tag: 'prod',
+  version: '2.18.4',
+  webSocketHost: window.location.host,
+  webSocketProtocol: window.location.protocol == 'https:' ? 'wss:' : 'ws:',
+  webSocketBaseUrl: base_url.pathname + 'ws/',
+}

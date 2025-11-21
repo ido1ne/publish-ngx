@@ -59,6 +59,9 @@ from paperless_mail.views import MailRuleViewSet
 from paperless_mail.views import OauthCallbackView
 from paperless_mail.views import ProcessedMailViewSet
 
+from paperless_public import views
+import paperless_public.urls
+
 api_router = DefaultRouter()
 api_router.register(r"correspondents", CorrespondentViewSet)
 api_router.register(r"document_types", DocumentTypeViewSet)
@@ -79,6 +82,7 @@ api_router.register(r"workflows", WorkflowViewSet)
 api_router.register(r"custom_fields", CustomFieldViewSet)
 api_router.register(r"config", ApplicationConfigurationViewSet)
 api_router.register(r"processed_mail", ProcessedMailViewSet)
+
 
 
 urlpatterns = [
@@ -230,6 +234,155 @@ urlpatterns = [
             ],
         ),
     ),
+    re_path(
+        r"^api/public/",
+        include(
+            [
+                re_path(
+                    "^auth/",
+                    include(
+                        ("rest_framework.urls", "rest_framework"),
+                        namespace="rest_framework",
+                    ),
+                ),
+                re_path(
+                    "^search/",
+                    include(
+                        [
+                            re_path(
+                                "^$",
+                                GlobalSearchView.as_view(),
+                                name="global_search",
+                            ),
+                            re_path(
+                                "^autocomplete/",
+                                SearchAutoCompleteView.as_view(),
+                                name="autocomplete",
+                            ),
+                        ],
+                    ),
+                ),
+                re_path(
+                    "^statistics/",
+                    StatisticsView.as_view(),
+                    name="statistics",
+                ),
+                re_path(
+                    "^documents/",
+                    include(
+                        [
+                            re_path(
+                                "^post_document/",
+                                PostDocumentView.as_view(),
+                                name="post_document",
+                            ),
+                            re_path(
+                                "^bulk_edit/",
+                                BulkEditView.as_view(),
+                                name="bulk_edit",
+                            ),
+                            re_path(
+                                "^bulk_download/",
+                                BulkDownloadView.as_view(),
+                                name="bulk_download",
+                            ),
+                            re_path(
+                                "^selection_data/",
+                                SelectionDataView.as_view(),
+                                name="selection_data",
+                            ),
+                        ],
+                    ),
+                ),
+                re_path(
+                    "^bulk_edit_objects/",
+                    BulkEditObjectsView.as_view(),
+                    name="bulk_edit_objects",
+                ),
+                re_path(
+                    "^remote_version/",
+                    RemoteVersionView.as_view(),
+                    name="remoteversion",
+                ),
+                re_path(
+                    "^ui_settings/",
+                    UiSettingsView.as_view(),
+                    name="ui_settings",
+                ),
+                path(
+                    "token/",
+                    PaperlessObtainAuthTokenView.as_view(),
+                ),
+                re_path(
+                    "^profile/",
+                    include(
+                        [
+                            re_path(
+                                "^$",
+                                ProfileView.as_view(),
+                                name="profile_view",
+                            ),
+                            path(
+                                "generate_auth_token/",
+                                GenerateAuthTokenView.as_view(),
+                            ),
+                            path(
+                                "disconnect_social_account/",
+                                DisconnectSocialAccountView.as_view(),
+                            ),
+                            path(
+                                "social_account_providers/",
+                                SocialAccountProvidersView.as_view(),
+                            ),
+                            path(
+                                "totp/",
+                                TOTPView.as_view(),
+                                name="totp_view",
+                            ),
+                        ],
+                    ),
+                ),
+                re_path(
+                    "^status/",
+                    SystemStatusView.as_view(),
+                    name="system_status",
+                ),
+                re_path(
+                    "^trash/",
+                    TrashView.as_view(),
+                    name="trash",
+                ),
+                re_path(
+                    r"^oauth/callback/",
+                    OauthCallbackView.as_view(),
+                    name="oauth_callback",
+                ),
+                re_path(
+                    "^schema/",
+                    include(
+                        [
+                            re_path(
+                                "^$",
+                                SpectacularAPIView.as_view(),
+                                name="schema",
+                            ),
+                            re_path(
+                                "^view/",
+                                SpectacularSwaggerView.as_view(),
+                                name="swagger-ui",
+                            ),
+                        ],
+                    ),
+                ),
+                re_path(
+                    "^$",  # Redirect to the API swagger view
+                    RedirectView.as_view(url="schema/view/"),
+                ),
+                *api_router.urls,
+            ],
+        ),
+    ),
+    re_path(r"public", views.PublicIndexView.as_view(), name="public_index"),
     re_path(r"share/(?P<slug>\w+)/?$", SharedLinkView.as_view()),
     re_path(r"^favicon.ico$", FaviconView.as_view(), name="favicon"),
     re_path(r"admin/", admin.site.urls),
@@ -253,6 +406,32 @@ urlpatterns = [
                     r"^preview/(?P<pk>\d+)$",
                     RedirectView.as_view(
                         url=settings.BASE_URL + "api/documents/%(pk)s/preview/",
+                    ),
+                ),
+            ],
+        ),
+    ),
+    # Frontend assets TODO: this is pretty bad, but it works.
+        re_path(
+        r"^fetch/",
+        include(
+            [
+                re_path(
+                    r"^doc/(?P<pk>\d+)$",
+                    RedirectView.as_view(
+                        url=settings.BASE_URL + "api/public/documents/%(pk)s/download/",
+                    ),
+                ),
+                re_path(
+                    r"^thumb/(?P<pk>\d+)$",
+                    RedirectView.as_view(
+                        url=settings.BASE_URL + "api/public/documents/%(pk)s/thumb/",
+                    ),
+                ),
+                re_path(
+                    r"^preview/(?P<pk>\d+)$",
+                    RedirectView.as_view(
+                        url=settings.BASE_URL + "api/public/documents/%(pk)s/preview/",
                     ),
                 ),
             ],
