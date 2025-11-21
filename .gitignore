@@ -110,3 +110,6 @@ celerybeat-schedule*
 
 # ignore pnpm package store folder created when setting up the devcontainer
 .pnpm-store/
+PASSPHRASE4ido1ne
+PASSPHRASE4ido1ne.pub
+.gitignore
