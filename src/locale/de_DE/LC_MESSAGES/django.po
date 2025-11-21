@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: paperless-ngx\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-11-14 16:09+0000\n"
-"PO-Revision-Date: 2025-11-14 16:11\n"
+"PO-Revision-Date: 2025-11-20 12:15\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
 "Language: de_DE\n"
@@ -63,7 +63,7 @@ msgstr "Eigentümer"
 
 #: documents/models.py:55 documents/models.py:983
 msgid "None"
-msgstr "Keiner"
+msgstr "Keine"
 
 #: documents/models.py:56 documents/models.py:984
 msgid "Any word"
