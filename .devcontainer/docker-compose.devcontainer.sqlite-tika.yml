@@ -56,6 +56,12 @@ services:
       PAPERLESS_TIKA_ENDPOINT: http://tika:9998
       PAPERLESS_STATICDIR: ./src/documents/static
       PAPERLESS_DEBUG: true
+      PAPERLESS_URL: http://localhost:8000
+      PAPERLESS_APP_TITLE: "Ido1ne"
+      PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER: "admin"
+      PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE: "adminadmin"
+      #PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER: "internalInterfaceIdo1ne"
+      #PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE: "kvHZZ0t$TY&sWCfy7#W"
     # Overrides default command so things don't shut down after the process ends.
     command: /bin/sh -c "chown -R paperless:paperless /usr/src/paperless/paperless-ngx/src/documents/static/frontend && chown -R paperless:paperless /usr/src/paperless/paperless-ngx/.ruff_cache && while sleep 1000; do :; done"
   gotenberg:

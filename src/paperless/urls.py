@@ -58,9 +58,8 @@ from paperless_mail.views import MailAccountViewSet
 from paperless_mail.views import MailRuleViewSet
 from paperless_mail.views import OauthCallbackView
 from paperless_mail.views import ProcessedMailViewSet
-
-from paperless_public import views
-import paperless_public.urls
+from paperless_public.views import PublicIndexView
+from paperless_stamp.views import webhook
 
 api_router = DefaultRouter()
 api_router.register(r"correspondents", CorrespondentViewSet)
@@ -82,7 +81,6 @@ api_router.register(r"workflows", WorkflowViewSet)
 api_router.register(r"custom_fields", CustomFieldViewSet)
 api_router.register(r"config", ApplicationConfigurationViewSet)
 api_router.register(r"processed_mail", ProcessedMailViewSet)
-
 
 
 urlpatterns = [
@@ -382,7 +380,8 @@ urlpatterns = [
             ],
         ),
     ),
-    re_path(r"public", views.PublicIndexView.as_view(), name="public_index"),
+    re_path(r"public", PublicIndexView.as_view(), name="public_index"),
+    re_path(r"api/stamp/webhook/$", webhook, name="webhook"),
     re_path(r"share/(?P<slug>\w+)/?$", SharedLinkView.as_view()),
     re_path(r"^favicon.ico$", FaviconView.as_view(), name="favicon"),
     re_path(r"admin/", admin.site.urls),
@@ -412,7 +411,7 @@ urlpatterns = [
         ),
     ),
     # Frontend assets TODO: this is pretty bad, but it works.
-        re_path(
+    re_path(
         r"^fetch/",
         include(
             [
