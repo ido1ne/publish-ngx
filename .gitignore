@@ -103,6 +103,7 @@ scripts/nuke
 celerybeat-schedule*
 
 # ignore .devcontainer sub folders
+/.devcontainer/
 /.devcontainer/consume/
 /.devcontainer/data/
 /.devcontainer/media/
@@ -113,3 +114,4 @@ celerybeat-schedule*
 PASSPHRASE4ido1ne
 PASSPHRASE4ido1ne.pub
 .gitignore
+.devcontainer/docker-compose.devcontainer.sqlite-tika.yml
