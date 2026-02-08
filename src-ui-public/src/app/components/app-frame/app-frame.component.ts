@@ -72,8 +72,14 @@ import { ToastsDropdownComponent } from './toasts-dropdown/toasts-dropdown.compo
 })
 export class AppFrameComponent
   extends ComponentWithPermissions
-  implements OnInit, ComponentCanDeactivate
-{
+  implements OnInit, ComponentCanDeactivate {
+
+
+  /* Spécifique Idoine */
+  logoUrl: string;
+
+
+
   router = inject(Router)
   private activatedRoute = inject(ActivatedRoute)
   private openDocumentsService = inject(OpenDocumentsService)
@@ -92,7 +98,7 @@ export class AppFrameComponent
 
   slimSidebarAnimating: boolean = false
 
-  constructor() {
+  constructor(private route: ActivatedRoute) {
     super()
     const permissionsService = this.permissionsService
 
@@ -109,6 +115,16 @@ export class AppFrameComponent
   }
 
   ngOnInit(): void {
+
+    /* spécifique idoine */
+    this.route.queryParams.subscribe(params => {
+      const correspondentId = params['correspondent__id__in'];
+      this.logoUrl = this.getLogoUrl(correspondentId);
+    });
+
+
+
+
     if (this.settingsService.get(SETTINGS_KEYS.UPDATE_CHECKING_ENABLED)) {
       this.checkForUpdates()
     }
@@ -150,6 +166,19 @@ export class AppFrameComponent
 
   get customAppTitle(): string {
     return this.settingsService.get(SETTINGS_KEYS.APP_TITLE)
+  }
+
+  get canSaveSettings(): boolean {
+    return (
+      this.permissionsService.currentUserCan(
+        PermissionAction.Change,
+        PermissionType.UISettings
+      ) &&
+      this.permissionsService.currentUserCan(
+        PermissionAction.Add,
+        PermissionType.UISettings
+      )
+    )
   }
 
   get slimSidebarEnabled(): boolean {
@@ -291,5 +320,15 @@ export class AppFrameComponent
       this.settingsService.get(SETTINGS_KEYS.SIDEBAR_VIEWS_SHOW_COUNT) &&
       !this.settingsService.organizingSidebarSavedViews
     )
+  }
+
+
+  /* specifique Idoine*/
+
+  getLogoUrl(correspondentId: string | null): string {
+    if (!correspondentId) {
+      return 'assets/default_logo.png'; // Default logo
+    }
+    return `assets/logo${correspondentId}.png`; // Concatenated logo URL
   }
 }

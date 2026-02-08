@@ -10,57 +10,51 @@ from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.models import Permission
 
-# from pyhanko.sign.timestamps.aiohttp_client import AIOHttpTimeStamper
-# from pyhanko_certvalidator.fetchers.aiohttp_fetchers import AIOHttpFetcherBackend
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from pyhanko import stamp
-from pyhanko.pdf_utils import text
-from pyhanko.pdf_utils.font import opentype
-
-# import aiohttp
-from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
-from pyhanko.pdf_utils.reader import PdfFileReader
-from pyhanko.sign import fields
-from pyhanko.sign import signers
-from pyhanko.sign.fields import SigSeedSubFilter
 
 from paperless import settings
 from paperless.celery import app
 
-logger = logging.getLogger("paperless.handlers")
+from paperless_stamp.sign import SignDocument
 
+
+logger = logging.getLogger("paperless.handlers")
+#make a new logger instance
+mylogger = logging.getLogger("paperless_stamp")
+file_handler = logging.FileHandler(settings.LOGGING_DIR / "paperless_stamp.log")
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+mylogger.addHandler(file_handler)
+mylogger.setLevel(logging.DEBUG)
 
 @csrf_exempt  # This is to disable CSRF validation for the incoming POST requests
 def webhook(request):
     if request.method == "POST" and "webhook" in request.path and CreateInterfaceUser():
         try:
-            logger.debug("Webook detecting : updating in progress")
+            mylogger.debug("Webook detecting : updating in progress")
             doc_url = request.POST.get("doc_url")
 
             if doc_url:
-                logger.debug("Fetching PDF from URL: %s", doc_url)
+                mylogger.debug("Fetching PDF from URL: %s", doc_url)
                 doc_id = doc_url.strip("/").split("/")[-1]
-                logger.debug("Extracted doc ID: %s", doc_id)
+                mylogger.debug("Extracted doc ID: %s", doc_id)
                 document = Documents(doc_id=doc_id)
 
                 # Download document to test if signature already exists
                 Documents.download_file_pdf(doc_id)
-                logger.debug(
-                    "Tests if document is already publishing by testing signature presence",
-                )
 
-                if not SignAndStampDocument.check_already_signed(doc_id):
+                mylogger.debug("Tests if document is already publishing by testing signature presence",)
+                if not SignDocument.check_already_signed(doc_id):
                     logger.debug("not ever signed, published")
                     ##task=process_document_task.delay(doc_id, api_client)
-                    mytaskstate = Statetask()
                     #   ### Enchaine les taches et envoi le resultat à la suivante si la tâche est SUCCESS
                     #   ##result = process_document_task.apply_async(args=(doc_id, api_client), link=get_stat_of_task.s())
                     result = chain(
                         document.process_document_task.s(document),
-                        mytaskstate.get_stat_of_task.s(previous_doc=document),
-                        mytaskstate.post_send_signed_doc.s(previous_doc=document),
+                        document.get_stat_of_task.s(previous_doc=document),
+                        document.post_send_signed_doc.s(previous_doc=document),
                         ##get_stat_of_task.s()  # assuming it's a fixed argument
                     )()
                     # document.modify_shared_link(document.shared_link_id)
@@ -81,14 +75,10 @@ class APIClient:
         self.base_url = "http://localhost:8000/api"
         # self.username="admin"
         # self.password="adminadmin"
-        self.username = os.getenv(
-            "PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER",
-            "internalInterfaceIdo1ne",
-        )
-        self.password = os.getenv(
-            "PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE",
-            "kvHZZ0t$TY&sWCfy7#W",
-        )
+
+        #API User
+        self.username = os.getenv("PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER","internalInterfaceIdo1ne",)
+        self.password = os.getenv("PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE","kvHZZ0t$TY&sWCfy7#W",)
         logger.debug(f"APIClient init with user {self.username} and {self.password}")
 
         self.token = self.retrieve_token()
@@ -129,8 +119,8 @@ class APIClient:
 
     def patch_right(self, endpoint, data):
         url = self.base_url + "/" + endpoint
-        response = requests.patch(url, headers=self.headers, data=data)
-        logger.debug("POST %s response: %s", url, response.content)
+        response = requests.patch(url, headers=self.headers, json=data)
+        logger.debug("PATCH %s response: %s", url, response.content)
         return self._handle_response(response)
 
     def generate_sharing_link(self, endpoint, data):
@@ -170,71 +160,96 @@ class APIClient:
 
 
 class Documents:
+
     def __init__(self, *args, **kwargs):
         self.api_client = APIClient()
         logger.debug("Initializing Documents with args: %s, kwargs: %s", args, kwargs)
         self.doc_id = kwargs.get("doc_id")
+        STAMPS_DIR,CERTS_DIR,BASE_SIGN=self.checkAndSetfolder()
         # self.cf_date_de_debut_de_publication = "2020-11-23"
         # self.cf_date_de_fin_de_publication = "2020-11-26"
         # self.cf_annexes_a_publier = [43,42]  # Example IDs for annexes to publish
+        self.cf_annexes_a_publier = []
         self.shared_link_id = ""
+        self.doc_correspondent= ""
+        self.doc_signataire= None
 
-        if self.checkfolder():
-            MEDIA_ROOT = settings.MEDIA_ROOT
-            STAMPS_DIR = MEDIA_ROOT / "stamps"
-            self.STAMPS_DIR = STAMPS_DIR
+        self.filenotsigned=f"{STAMPS_DIR}/{self.doc_id}.pdf"
+        self.filesigned=f"{STAMPS_DIR}/{self.doc_id}_sign.pdf"
+        self.fileorginalmeta=f"{STAMPS_DIR}/{self.doc_id}_metadata.json"
+        self.filenewmeta=f"{STAMPS_DIR}/{self.doc_id}_metadata_modified.json"
+        self.basesignataires=f"{BASE_SIGN}/signataires.json"
 
     @staticmethod
-    def checkfolder():
+    def checkAndSetfolder():
         try:
             MEDIA_ROOT = settings.MEDIA_ROOT
             STAMPS_DIR = MEDIA_ROOT / "stamps"
             CERTS_DIR = MEDIA_ROOT / "certs"
+            BASE_SIGN = MEDIA_ROOT / "base_signataires"
 
-            logger.debug("Ensuring stamps directory exists at: %s", STAMPS_DIR)
+            logger.debug(f"Check Stamp dir {STAMPS_DIR} and Certs dir {CERTS_DIR} exists")
             if not STAMPS_DIR.exists():
                 STAMPS_DIR.mkdir(parents=True)
             if not CERTS_DIR.exists():
                 CERTS_DIR.mkdir(parents=True)
-            return True
+            if not BASE_SIGN.exists():
+                BASE_SIGN.mkdir(parents=True)
+            if STAMPS_DIR.exists() and CERTS_DIR.exists() and BASE_SIGN.exists() :
+                logger.debug(f"Initialize Stamp dir {STAMPS_DIR}, Certs {CERTS_DIR}, Base signataires {BASE_SIGN}")
+                return STAMPS_DIR,CERTS_DIR,BASE_SIGN
+            else :
+                return False
         except:
-            raise Exception(f"Failed to initialize Stamp dir {STAMPS_DIR}")
-            return False
+            raise Exception(f"Failed to initialize Stamp dir {STAMPS_DIR} and {CERTS_DIR}")
 
     @shared_task
+    # Tâche principal de signature
     def process_document_task(self):
-        # api_client = APIClient()
-        sign_client = SignAndStampDocument()
+        #sign_client = SignAndStampDocument()
         self.load_from_api()
         self.save_original_metadata_by_api()
         self.load_original_metadata_from_file()
         self.download_pdf()
         self.display_document_json_data()
+
         logger.debug("Test if document could be signed")
-        sign_client.applySignature(
-            f"{self.STAMPS_DIR}/{self.doc_id}.pdf",
-            f"{self.STAMPS_DIR}/{self.doc_id}_sign.pdf",
-        )
-        logger.debug("Document %s was SIGNED successfully.", self.doc_id)
-        last_id = self.get_last_id_of_document()
-        logger.debug(f"Create a sharing link on {last_id}")
-        self.make_a_sharing_link(last_id)
-        self.delete_original_document()
-        self.empty_original_document_from_trash()
-        uuidtask = self.post_new_document(f"{self.STAMPS_DIR}/{self.doc_id}_sign.pdf")
-        logger.debug(
-            "Document %s was SIGNED and posted with UUID: %s",
-            self.doc_id,
-            uuidtask,
-        )
+
+        # retrieve signataire from base_signataires
+        signataire=self.get_signataire_from_file(self.doc_correspondent)
+        logger.debug(f"signataire found : {signataire}")
+
+        # if signataire is found in pseudodatabase
+        if signataire is not None:
+            sign_client=SignDocument(input=self.filenotsigned,
+                                output=self.filesigned,
+                                qr_url="http://exemple.com",
+                                text_params={'url': 'https://example.com','signer':signataire,'date':'06/01/2025','checksum':'0f12df21sdf154'})
+            logger.debug("Document %s was SIGNED successfully.", self.doc_id)
+
+            last_id = self.get_last_id_of_document()
+
+            logger.debug(f"Create a sharing link on {last_id}")
+            self.make_a_sharing_link(last_id)
+            self.delete_original_document()
+            self.empty_original_document_from_trash()
+            uuidtask = self.post_new_document(self.filesigned)
+
+        """
+        if len(self.cf_annexes_a_publier)>0:
+            for i in self.cf_annexes_a_publier:
+                self.process_document_task(Documents(doc_id=i))
+        """
+
+        logger.debug("Document %s was SIGNED and posted with UUID: %s",self.doc_id,uuidtask,)
         return uuidtask
 
     def load_from_api(self):
         if self.doc_id:
-            data = self.api_client.get(
-                "documents/" + self.doc_id + "/" + "?full_perms=true",
-            ).json()
+            data = self.api_client.get("documents/" + self.doc_id + "/" + "?full_perms=true",).json()
             self.doc_id = str(data.get("id"))
+            self.doc_correspondent=str(data.get("correspondent"))
+
             return Documents
         else:
             raise Exception(f"Failed to load document with id {self.doc_id}")
@@ -244,13 +259,13 @@ class Documents:
         if self.doc_id:
             data = self.api_client.get("documents/" + self.doc_id + "/")
             # write metadata to file
-            open(f"{self.STAMPS_DIR}/{self.doc_id}_metadata.json", "w").write(data.text)
+            open(self.fileorginalmeta, "w").write(data.text)
         else:
             raise Exception(f"Failed to load document with id {self.doc_id}")
 
     def load_original_metadata_from_file(self):
         if self.doc_id:
-            data = open(f"{self.STAMPS_DIR}/{self.doc_id}_metadata.json").read()
+            data = open(self.fileorginalmeta).read()
             datajson = json.loads(data)
 
             # Modify owner to public user
@@ -266,6 +281,7 @@ class Documents:
             #    },
             # }
             # Modify custom fields
+            self.doc_correspondent=datajson["correspondent"]
             custom_fields = datajson.get("custom_fields", [])
             # Detect number of custom fields
             counter_of_custom_fields = len(custom_fields)
@@ -296,17 +312,9 @@ class Documents:
             datajson["custom_fields"] = json.dumps(custom_fields)
             # datajson['custom_fields'] = '{\'1\': \'' + self.cf_date_de_debut_de_publication + '\', \'2\': \'' + self.cf_date_de_fin_de_publication + '\', \'3\': [' + ', '.join(map(str, self.cf_annexes_a_publier)) + ']}'
             # write data json to file
-            open(f"{self.STAMPS_DIR}/{self.doc_id}_metadata_modified.json", "w").write(
+            open(self.filenewmeta, "w").write(
                 json.dumps(datajson),
             )
-            # logger.debug("Document JSON Data: %s", json.dumps(datajson, indent=4))
-
-            # Example to read existing custom fields
-            # existing_custom_fields=
-
-            # data_maj=json.dumps(data)
-            # write metadata to file
-            # open(f"{STAMPS_DIR}/{self.doc_id}_metadata.json", "w").write(data_maj)
             return Documents
         else:
             raise Exception(f"Failed to load document with id {self.doc_id} from file")
@@ -328,10 +336,19 @@ class Documents:
             logger.debug(f"public user id {user_id}")
             return user_id
 
+    def get_group_id_in_relation_with_correspondant(self,previous_doc):
+        api_client = APIClient()
+        data = api_client.get("correspondents/"+str(previous_doc.doc_correspondent)+"/"+"?full_perms=true").json()
+        if data:
+            group_id_in_relation_with_correspondant = data['permissions']['view']['groups']
+            logger.debug(f"Group ID in relation with the correspondant {group_id_in_relation_with_correspondant}")
+            return group_id_in_relation_with_correspondant
+
+
     def download_pdf(self):
         if self.doc_id:
             pdf = self.api_client.get("documents/" + self.doc_id + "/download/")
-            open(f"{self.STAMPS_DIR}/{self.doc_id}.pdf", "wb").write(pdf.content)
+            open(self.filenotsigned, "wb").write(pdf.content)
             return f"Document {self.doc_id} downloaded successfully."
         else:
             raise Exception(f"Failed to download document with id {self.doc_id}")
@@ -350,48 +367,13 @@ class Documents:
 
     def display_document_json_data(self):
         if self.doc_id:
-            data = open(f"{self.STAMPS_DIR}/{self.doc_id}_metadata.json").read()
+            data = open(self.fileorginalmeta).read()
             data = json.loads(data)
 
             logger.debug("Document JSON Data: %s", json.dumps(data, indent=4))
+            mylogger.debug("Document JSON Data: %s", json.dumps(data, indent=4))
         else:
             raise Exception(f"Failed to load document with id {self.doc_id} from file")
-
-    def stamp_document(self):
-        # Create a PDF stamp with the custom field information
-        packet = io.BytesIO()
-        can = canvas.Canvas(packet, pagesize=letter)
-        can.drawString(
-            100,
-            750,
-            f"Date de debut de publication: {self.cf_date_de_debut_de_publication}",
-        )
-        can.drawString(
-            100,
-            730,
-            f"Date de fin de publication: {self.cf_date_de_fin_de_publication}",
-        )
-        can.save()
-
-        # Move to the beginning of the StringIO buffer
-        packet.seek(0)
-        stamp_pdf = PdfReader(packet)
-
-        # Read the existing PDF
-        existing_pdf = PdfReader(open(f"{self.doc_id}.pdf", "rb"))
-        output = PdfWriter()
-
-        # Add the stamp to each page
-        for page_num in range(len(existing_pdf.pages)):
-            page = existing_pdf.pages[page_num]
-            page.merge_page(stamp_pdf.pages[0])
-            output.add_page(page)
-
-        # Save the stamped PDF
-        with open(f"{self.doc_id}_stamped.pdf", "wb") as outputStream:
-            output.write(outputStream)
-
-        print(f"Document {self.doc_id} stamped successfully.")
 
     def delete_original_document(self):
         if self.doc_id:
@@ -410,15 +392,12 @@ class Documents:
             print(f"Document {self.doc_id} emptied from trash successfully.")
 
     def simple_post_new_document(self):
-        MEDIA_ROOT = settings.MEDIA_ROOT
+        logger.debug("Ensuring stamps directory exists at: %s", self.STAMPS_DIR)
+        if not self.STAMPS_DIR.exists():
+            self.STAMPS_DIR.mkdir(parents=True)
 
-        STAMPS_DIR = MEDIA_ROOT / "stamps"
-        logger.debug("Ensuring stamps directory exists at: %s", STAMPS_DIR)
-        if not STAMPS_DIR.exists():
-            STAMPS_DIR.mkdir(parents=True)
-
-        if os.path.exists(f"{STAMPS_DIR}/{self.doc_id}.pdf"):
-            files = {"document": open(f"{STAMPS_DIR}/{self.doc_id}.pdf", "rb")}
+        if os.path.exists(f"{self.STAMPS_DIR}/{self.doc_id}.pdf"):
+            files = {"document": open(f"{self.STAMPS_DIR}/{self.doc_id}.pdf", "rb")}
             data = {
                 "title": "test12",  # Simplified title
             }
@@ -467,13 +446,9 @@ class Documents:
             )
 
     def post_new_document(self, signed_doc_path):
-        test_file_path = f"STAMPS_DIR{self.doc_id}.pdf"
-        metadata_file_path = f"STAMPS_DIR{self.doc_id}_metadata_modified.json"
-        if os.path.exists(f"{self.STAMPS_DIR}/{self.doc_id}_sign.pdf"):
+        if os.path.exists(self.filesigned):
             files = {"document": open(f"{signed_doc_path}", "rb")}
-            data = open(
-                f"{self.STAMPS_DIR}/{self.doc_id}_metadata_modified.json",
-            ).read()
+            data = open(self.filenewmeta).read()
             data = json.loads(data)
             # custom fields must be like {"1": "2025-11-23","2": "2025-11-26","3":[43,42]}
 
@@ -555,7 +530,7 @@ class Documents:
         # Loop until the task status is SUCCESS or timeout occurs
         logger.debug("Waiting for task %s to complete...", uuidtask)
 
-    def set_new_right(self):
+    def set_new_right(self,previous_doc):
         # data= {
         #    "owner": self.get_id_of_public_user(),
         #    "set_permissions": {
@@ -570,7 +545,15 @@ class Documents:
         #    },
         # }
         public_user_id = self.get_id_of_public_user()
-        data = {"owner": public_user_id}
+        public_user_group=self.get_id_of_public_group()
+        group_id_in_relation_with_correspondant=self.get_group_id_in_relation_with_correspondant(previous_doc)
+        # concat int public_user_group and one or many group
+        group_value=[public_user_group]+group_id_in_relation_with_correspondant
+
+        data = {
+        "owner": public_user_id,
+        "set_permissions": { "view": { "groups": group_value } }
+        }
         response = self.api_client.patch_right(
             endpoint="documents/" + self.doc_id + "/",
             data=data,
@@ -580,7 +563,7 @@ class Documents:
 
     def get_last_id_of_document(self):
         # dernier document publié
-        owner = self.get_id_of_public_group()
+        owner = self.get_id_of_public_user()
         response = self.api_client.get(
             f"documents/?ordering=-id&owner__id={owner}",
         ).json()
@@ -588,12 +571,37 @@ class Documents:
             last_doc_id = response["results"][0]["id"]
             return last_doc_id
 
+    def delete_temporary_files(self):
+        try:
+            if os.path.exists(self.filenotsigned):
+                os.remove(self.filenotsigned)
+            if os.path.exists(self.filesigned):
+                os.remove(self.filesigned)
+            if os.path.exists(self.fileorginalmeta):
+                os.remove(self.fileorginalmeta)
+            if os.path.exists(self.filenewmeta):
+                os.remove(self.filenewmeta)
+            logger.debug("Temporary files deleted successfully.")
+        except Exception as e:
+            logger.error("Error deleting temporary files: %s", str(e))
 
-class Statetask:
-    def __init__(self, *args, **kwargs):
-        logger.debug("Initializing Statetask with args: %s, kwargs: %s", args, kwargs)
+    def get_signataire_from_file(self,id_correspondant):
+        with open(self.basesignataires, 'r') as file:
+            # Load the JSON data
+            data = json.load(file)
+            try:
+                signataire=data.get(id_correspondant)
+                for k, v in data.items():
+                    if k == str(id_correspondant):
+                        logger.debug(f"signataire found in file : {v}")
+                        return v
+            except:
+                logger.debug(f"signataires not found")
+
+            return data
 
     @app.task
+    # Récupère l'état de la tâche pour déterminer si le POSTing du document signé est terminé
     def get_stat_of_task(uuid, previous_doc):
         api_client = APIClient()
         # logger.debug(f"task to check{uuid}")
@@ -602,31 +610,24 @@ class Statetask:
         related_document = data[0].get("related_document")
         # logger.debug("Task JSON Data: %s", json.dumps(data, indent=4))
         logger.debug(f" Related document is : {related_document}")
-        time.sleep(5)
-        logger.debug("RETRIERVE NEW TWO TASK")
-        logger.debug(f"PREVIOUS DOC HAS {previous_doc.doc_id}")
+        #time.sleep(5)
+        #logger.debug("RETRIERVE NEW TWO TASK")
+        #logger.debug(f"PREVIOUS DOC HAS {previous_doc.doc_id}")
         return related_document
-        # document.set_new_right(doc_id=related_document)
-        # test=SignAndStampDocument()
-        # test.applySignature()
 
     @app.task
+    # Exécute le traitement post-signature du document : ajout des droits, replacement du permalien sur le document signé
     def post_send_signed_doc(related_document, previous_doc):
         try:
             newdoc = Documents(doc_id=related_document)
-            newdoc.set_new_right()
+            newdoc.set_new_right(previous_doc=previous_doc)
             newdoc.modify_shared_link(shared_link_id=previous_doc.shared_link_id)
-            # TO DO
-            # patch shared link
+            newdoc.delete_temporary_files()
+            previous_doc.delete_temporary_files()
 
         except requests.exceptions.RequestException as e:
             return {"error": str(e)}
-        # api_client = APIClient()
-        # Change document with public rights
-        # ndocument = Documents(doc_id=str(related_document), api_client=api_client)
-        # id_public_user = ndocument.get_id_of_public_group()
-        # id_public_group = ndocument.get_id_of_public_user()
-        # logger.debug(f"Set new rights for {related_document} with {id_public_user} and {id_public_group}")
+
 
 
 def CreateInterfaceUser():
@@ -667,149 +668,3 @@ def CreateInterfaceUser():
             logger.debug("Failed to create internalInterface user")
             return False
 
-
-# @app.task
-# def get_stat_of_task(self):
-#    logger.debug(f"NEW TASK THAT I WANT TO CHECK {self.uuid}")
-#    time.sleep(5)
-#    logger.debug(f"RETRIERVE NEW TWO TASK")
-
-
-class SignAndStampDocument:
-    def __init__(self):
-        try:
-            MEDIA_ROOT = settings.MEDIA_ROOT  # Ensure MEDIA_ROOT is a Path object
-            CERTS_DIR = MEDIA_ROOT / "certs"
-            if not CERTS_DIR.exists():
-                CERTS_DIR.mkdir(parents=True)
-
-            self.CERTS_DIR = str(CERTS_DIR)
-
-            # certificate in p12 format
-            self.CERT_PATH_FILE_P12 = self.CERTS_DIR + "/cert.p12"
-            self.CERT_PASSPHRASE_P12 = b"l1O!Yutd@XTceY2D"
-            # certificate in pem format
-            self.CERT_PATH_FILE = self.CERTS_DIR + "/domain.crt"
-            self.CERT_KEY_FILE = self.CERTS_DIR + "/domain.key"
-            self.CERT_PASSPHRASE = b"PASSPHRASE"
-
-            logger.debug(f"certs dir is: {self.CERT_PATH_FILE}")
-
-            self.STAMP_FONT = self.CERTS_DIR + "/NotoSans-Regular.ttf"
-            self.TRUST_CA_CERT = self.CERTS_DIR + "/chain.cer"
-            # self.infile='/usr/src/paperless/paperless-ngx/media/stamps/17.pdf'
-            # self.outfile='/usr/src/paperless/paperless-ngx/media/stamps/17sign.pdf'
-            logger.debug(f"{self.CERT_PATH_FILE}")
-            # self.createSignerpkcsp12()
-            self.createSignerpkcs()
-            self.signatureMeta()
-        except:
-            raise Exception(f"Failed to initialize Stamp dir {self.CERTS_DIR}")
-
-    # récupération des infos du certificate
-    def createSignerpkcsp12(self):
-        self.signer = signers.SimpleSigner.load_pkcs12(
-            pfx_file=self.CERT_PATH_FILE_P12,
-            passphrase=self.CERT_PASSPHRASE_P12,
-        )
-
-    def createSignerpkcs(self):
-        self.signer = signers.SimpleSigner.load(
-            cert_file=self.CERT_PATH_FILE,
-            key_file=self.CERT_KEY_FILE,
-            key_passphrase=self.CERT_PASSPHRASE,
-        )
-        if self.signer == None:
-            print("Error while opening PFX file.")
-        return self.signer
-
-    # Settings for PAdES-LTA
-    def signatureMeta(self):
-        self.signature_meta = signers.PdfSignatureMetadata(
-            field_name="SignatureIdo1ne",
-            md_algorithm="sha256",
-            # Mark the signature as a PAdES signature
-            subfilter=SigSeedSubFilter.PADES,
-            # We'll also need a validation context
-            # to fetch & embed revocation info.
-            # validation_context=ValidationContext(allow_fetching=True),
-            # Embed relevant OCSP responses / CRLs (PAdES-LT)
-            # embed_validation_info=True,
-            # Tell pyHanko to put in an extra DocumentTimeStamp
-            # to kick off the PAdES-LTA timestamp chain.
-            use_pades_lta=True,
-            signer_key_usage={"non_repudiation"},
-        )
-
-    # Application de la signature
-    def applySignature(self, infile, outfile):
-        with open(infile, "rb") as inf:
-            # needed to avoid pyhanko.sign.general.SigningError: Attempting to sign document with hybrid cross-reference sections while hybrid xrefs are disabled
-            w = IncrementalPdfFileWriter(inf, strict=False)
-            fields.append_signature_field(
-                w,
-                sig_field_spec=fields.SigFieldSpec(
-                    "SignatureIdo1ne",
-                    box=(30, 300, 150, 330),
-                ),
-            )
-
-            meta = signers.PdfSignatureMetadata(field_name="SignatureIdo1ne")
-
-            pdf_signer = signers.PdfSigner(
-                meta,
-                signer=self.signer,
-                stamp_style=stamp.QRStampStyle(
-                    # Let's include the URL in the stamp text as well
-                    stamp_text="Signed by: %(signer)s\n\nTime: %(ts)s\n\nURL: %(url)s",
-                    text_box_style=text.TextBoxStyle(
-                        font=opentype.GlyphAccumulatorFactory(self.STAMP_FONT),
-                    ),
-                ),
-            )
-
-            """"
-            meta = signers.PdfSignatureMetadata(field_name='Signature')
-            pdf_signer = signers.PdfSigner(
-                meta, signer=self.signer, stamp_style=stamp.QRStampStyle(
-                    # Let's include the URL in the stamp text as well
-                    stamp_text='Signed by: %(signer)s\n\nTime: %(ts)s\n\nURL: %(url)s',
-                    text_box_style=text.TextBoxStyle(
-                        font=opentype.GlyphAccumulatorFactory(self.STAMP_FONT)
-                    ),
-                ),
-            )
-            """
-
-            with open(outfile, "wb") as outf:
-                signers.sign_pdf(
-                    w,
-                    self.signature_meta,
-                    self.signer,
-                    output=outf,
-                )
-
-    @staticmethod
-    def check_already_signed(doc_id):
-        MEDIA_ROOT = settings.MEDIA_ROOT
-        STAMPS_DIR = MEDIA_ROOT / "stamps"
-
-        with open(f"{STAMPS_DIR}/{doc_id}.pdf", "rb") as doc:
-            r = PdfFileReader(doc)
-            if len(r.embedded_signatures) == 0:
-                logger.debug(
-                    f"No embedded signatures found in {STAMPS_DIR}/{doc_id}.pdf",
-                )
-                return False
-            else:
-                sig = r.embedded_signatures[0]
-                if sig.field_name == "SignatureIdo1ne":
-                    logger.debug(sig.field_name + " is already present")
-                    return True
-                else:
-                    logger.debug(
-                        "an other signature"
-                        + sig.field_name
-                        + "is already present but not SignatureIdo1ne",
-                    )
-                    return False

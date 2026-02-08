@@ -1,5 +1,13 @@
 from django.apps import AppConfig
 from paperless import settings
+import logging
+
+logger = logging.getLogger("paperless_public")
+file_handler = logging.FileHandler(settings.LOGGING_DIR / "paperless_public.log")
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.DEBUG)
 
 class PaperlessPublicConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -50,3 +58,14 @@ class CreatePublicUser:
         except (OperationalError, ProgrammingError, Permission.DoesNotExist):
             # Database isn't ready or permissions don't exist yet
             pass
+
+@staticmethod
+def checkAndSetLogoFolder():
+    try:
+        MEDIA_ROOT = settings.MEDIA_ROOT
+        LOGO_DIR = MEDIA_ROOT / "logo"
+        logger.debug(f"Check Logo dir {LOGO_DIR} exists")
+        if not LOGO_DIR.exists():
+            LOGO_DIR.mkdir(parents=True)
+    except:
+        raise Exception(f"Failed to initialize LOGO dir {LOGO_DIR} ")

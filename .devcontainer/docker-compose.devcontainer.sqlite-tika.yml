@@ -57,9 +57,15 @@ services:
       PAPERLESS_STATICDIR: ./src/documents/static
       PAPERLESS_DEBUG: true
       PAPERLESS_URL: http://localhost:8000
-      PAPERLESS_APP_TITLE: "Ido1ne"
+      #PAPERLESS_APP_TITLE: "Ido1ne"
       PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER: "admin"
       PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE: "adminadmin"
+      PAPERLESS_OCR_SKIP_ARCHIVE_FILE: always
+      PAPERLESS_WEBHOOKS_ALLOWED_SCHEMES: http://localhost:8000
+      # Dev
+      PAPERLESS_CORS_ALLOWED_HOSTS: http://localhost:8000, http://localhost:4200
+      PAPERLESS_ALLOWED_HOSTS: http://localhost:8000, http://localhost:4200
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: http://localhost:8000, http://localhost:4200
       #PAPERLESS_IDO1NE_INTERNAL_INTERFACE_USER: "internalInterfaceIdo1ne"
       #PAPERLESS_IDO1NE_INTERNAL_INTERFACE_PASSPHRASE: "kvHZZ0t$TY&sWCfy7#W"
     # Overrides default command so things don't shut down after the process ends.

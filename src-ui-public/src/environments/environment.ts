@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false,
-  apiBaseUrl: 'http://localhost:8000/api/pub/',
+  apiBaseUrl: 'http://localhost:8000/api/public/',
   apiVersion: '9',
   appTitle: 'Paperless-idoine-test',
   tag: 'dev',

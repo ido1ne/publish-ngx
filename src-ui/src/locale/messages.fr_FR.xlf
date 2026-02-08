@@ -484,7 +484,7 @@
           <context context-type="sourcefile">src/app/app.component.ts</context>
           <context context-type="linenumber">208</context>
         </context-group>
-        <target state="final">Les étiquettes, correspondants, types de documents et chemins de stockage peuvent tous être gérés à l'aide de ces pages. Ils peuvent également être créés à partir de la vue d'édition du document.</target>
+        <target state="final">Les étiquettes, Collectivités, types de documents et chemins de stockage peuvent tous être gérés à l'aide de ces pages. Ils peuvent également être créés à partir de la vue d'édition du document.</target>
       </trans-unit>
       <trans-unit id="7851939076947092983" datatype="html">
         <source>Manage e-mail accounts and rules for automatically importing documents.</source>
@@ -3020,7 +3020,7 @@
           <context context-type="sourcefile">src/app/components/dashboard/widgets/statistics-widget/statistics-widget.component.html</context>
           <context context-type="linenumber">107</context>
         </context-group>
-        <target state="final">Correspondants</target>
+        <target state="final">Collectivités</target>
       </trans-unit>
       <trans-unit id="7886570921510760899" datatype="html" approved="yes">
         <source>Tags</source>
@@ -3344,7 +3344,7 @@
           <context context-type="sourcefile">src/app/components/app-frame/global-search/global-search.component.html</context>
           <context context-type="linenumber">110</context>
         </context-group>
-        <target state="translated">Correspondants</target>
+        <target state="translated">Collectivités</target>
       </trans-unit>
       <trans-unit id="searchResults.documentTypes" datatype="html">
         <source>Document types</source>
@@ -4404,7 +4404,7 @@
           <context context-type="sourcefile">src/app/components/common/edit-dialog/mail-rule-edit-dialog/mail-rule-edit-dialog.component.html</context>
           <context context-type="linenumber">47</context>
         </context-group>
-        <target state="translated">N'inclure que les fichiers correspondants</target>
+        <target state="translated">N'inclure que les fichiers Collectivités</target>
       </trans-unit>
       <trans-unit id="7233407036155150477" datatype="html">
         <source>Optional. Wildcards e.g. *.pdf or *invoice* allowed. Can be comma-separated list. Case insensitive.</source>
@@ -4424,7 +4424,7 @@
           <context context-type="sourcefile">src/app/components/common/edit-dialog/mail-rule-edit-dialog/mail-rule-edit-dialog.component.html</context>
           <context context-type="linenumber">48</context>
         </context-group>
-        <target state="translated">Exclure les fichiers correspondants</target>
+        <target state="translated">Exclure les fichiers Collectivités</target>
       </trans-unit>
       <trans-unit id="9216117865911519658" datatype="html" approved="yes">
         <source>Action</source>
@@ -5384,7 +5384,7 @@
           <context context-type="sourcefile">src/app/components/common/edit-dialog/workflow-edit-dialog/workflow-edit-dialog.component.html</context>
           <context context-type="linenumber">326</context>
         </context-group>
-        <target state="final">Supprimer des correspondants</target>
+        <target state="final">Supprimer des Collectivités</target>
       </trans-unit>
       <trans-unit id="5305293055593064952" datatype="html" approved="yes">
         <source>Remove document types</source>
@@ -8092,7 +8092,7 @@
           <context context-type="sourcefile">src/app/components/document-list/filter-editor/filter-editor.component.html</context>
           <context context-type="linenumber">51</context>
         </context-group>
-        <target state="final">Filtrer les correspondants</target>
+        <target state="final">Filtrer les Collectivités</target>
       </trans-unit>
       <trans-unit id="2947613869920454977" datatype="html" approved="yes">
         <source>Filter document types</source>
@@ -9351,7 +9351,7 @@
           <context context-type="sourcefile">src/app/components/manage/correspondent-list/correspondent-list.component.ts</context>
           <context context-type="linenumber">48</context>
         </context-group>
-        <target state="final">correspondants</target>
+        <target state="final">Collectivités</target>
       </trans-unit>
       <trans-unit id="6360600151505327572" datatype="html">
         <source>Last used</source>

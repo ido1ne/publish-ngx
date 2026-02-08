@@ -72,8 +72,7 @@ import { ToastsDropdownComponent } from './toasts-dropdown/toasts-dropdown.compo
 })
 export class AppFrameComponent
   extends ComponentWithPermissions
-  implements OnInit, ComponentCanDeactivate
-{
+  implements OnInit, ComponentCanDeactivate {
   router = inject(Router)
   private activatedRoute = inject(ActivatedRoute)
   private openDocumentsService = inject(OpenDocumentsService)
@@ -150,19 +149,6 @@ export class AppFrameComponent
 
   get customAppTitle(): string {
     return this.settingsService.get(SETTINGS_KEYS.APP_TITLE)
-  }
-
-  get canSaveSettings(): boolean {
-    return (
-      this.permissionsService.currentUserCan(
-        PermissionAction.Change,
-        PermissionType.UISettings
-      ) &&
-      this.permissionsService.currentUserCan(
-        PermissionAction.Add,
-        PermissionType.UISettings
-      )
-    )
   }
 
   get slimSidebarEnabled(): boolean {
