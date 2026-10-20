@@ -2,25 +2,25 @@ import json
 import shutil
 from unittest import mock
 
-from django.contrib.auth.models import Permission
-from django.contrib.auth.models import User
 from django.core import mail
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from documents.models import Document
-from documents.tests.utils import DirectoriesMixin
 from documents.tests.utils import SampleDirMixin
+from paperless_testing.dirs import DirectoriesMixin
+from paperless_testing.factories import UserFactory
+from paperless_testing.permissions import grant_global
 
 
 class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
     ENDPOINT = "/api/documents/email/"
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
-        self.user = User.objects.create_superuser(username="temp_admin")
+        self.user = UserFactory(username="temp_admin", superuser=True)
         self.client.force_authenticate(user=self.user)
 
         self.doc1 = Document.objects.create(
@@ -58,7 +58,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         EMAIL_ENABLED=True,
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )
-    def test_email_success(self):
+    def test_email_success(self) -> None:
         """
         GIVEN:
             - Multiple existing documents (doc1 with archive, doc2 without)
@@ -75,7 +75,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
                 {
                     "documents": [self.doc1.pk, self.doc2.pk],
                     "addresses": "hello@paperless-ngx.com,test@example.com",
-                    "subject": "Bulk email test",
+                    "subject": "Bulk email\n test",
                     "message": "Here are your documents",
                 },
             ),
@@ -113,7 +113,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         EMAIL_ENABLED=True,
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )
-    def test_email_use_original_version(self):
+    def test_email_use_original_version(self) -> None:
         """
         GIVEN:
             - Documents with archive versions
@@ -145,7 +145,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         original_size = self.doc1.source_path.stat().st_size
         self.assertEqual(len(attachment[1]), original_size)
 
-    def test_email_missing_required_fields(self):
+    def test_email_missing_required_fields(self) -> None:
         """
         GIVEN:
             - Request with missing required fields
@@ -210,7 +210,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_email_empty_document_list(self):
+    def test_email_empty_document_list(self) -> None:
         """
         GIVEN:
             - Request with empty document list
@@ -233,7 +233,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_email_invalid_document_id(self):
+    def test_email_invalid_document_id(self) -> None:
         """
         GIVEN:
             - Request with non-existent document ID
@@ -256,7 +256,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_email_invalid_email_address(self):
+    def test_email_invalid_email_address(self) -> None:
         """
         GIVEN:
             - Request with invalid email address
@@ -294,7 +294,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_email_insufficient_permissions(self):
+    def test_email_insufficient_permissions(self) -> None:
         """
         GIVEN:
             - User without permissions to view document
@@ -303,8 +303,8 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         THEN:
             - Forbidden response is returned
         """
-        user1 = User.objects.create_user(username="test1")
-        user1.user_permissions.add(*Permission.objects.filter(codename="view_document"))
+        user1 = UserFactory(username="test1")
+        grant_global(user1, "view_document")
 
         doc_owned = Document.objects.create(
             title="owned_doc",
@@ -329,7 +329,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_email_only_requires_view_permission(self):
+    def test_email_only_requires_view_permission(self) -> None:
         """
         GIVEN:
             - User having only view documents permission
@@ -338,8 +338,8 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         THEN:
             - Request succeeds
         """
-        user1 = User.objects.create_user(username="test1")
-        user1.user_permissions.add(*Permission.objects.filter(codename="view_document"))
+        user1 = UserFactory(username="test1")
+        grant_global(user1, "view_document")
 
         self.client.force_authenticate(user1)
 
@@ -361,7 +361,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         EMAIL_ENABLED=True,
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )
-    def test_email_duplicate_filenames(self):
+    def test_email_duplicate_filenames(self) -> None:
         """
         GIVEN:
             - Multiple documents with the same title
@@ -414,7 +414,7 @@ class TestEmail(DirectoriesMixin, SampleDirMixin, APITestCase):
         "django.core.mail.message.EmailMessage.send",
         side_effect=Exception("Email error"),
     )
-    def test_email_send_error(self, mocked_send):
+    def test_email_send_error(self, mocked_send) -> None:
         """
         GIVEN:
             - Existing documents

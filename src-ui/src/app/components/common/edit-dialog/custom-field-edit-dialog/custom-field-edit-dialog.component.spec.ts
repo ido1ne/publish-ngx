@@ -10,7 +10,6 @@ import { NgxBootstrapIconsModule, allIcons } from 'ngx-bootstrap-icons'
 import { CustomFieldDataType } from 'src/app/data/custom-field'
 import { IfOwnerDirective } from 'src/app/directives/if-owner.directive'
 import { IfPermissionsDirective } from 'src/app/directives/if-permissions.directive'
-import { SafeHtmlPipe } from 'src/app/pipes/safehtml.pipe'
 import { SettingsService } from 'src/app/services/settings.service'
 import { SelectComponent } from '../../input/select/select.component'
 import { TextComponent } from '../../input/text/text.component'
@@ -35,7 +34,6 @@ describe('CustomFieldEditDialogComponent', () => {
         IfOwnerDirective,
         SelectComponent,
         TextComponent,
-        SafeHtmlPipe,
       ],
       providers: [
         NgbActiveModal,
@@ -46,33 +44,33 @@ describe('CustomFieldEditDialogComponent', () => {
 
     fixture = TestBed.createComponent(CustomFieldEditDialogComponent)
     settingsService = TestBed.inject(SettingsService)
-    settingsService.currentUser = { id: 99, username: 'user99' }
+    settingsService.currentUser.set({ id: 99, username: 'user99' })
     component = fixture.componentInstance
 
     fixture.detectChanges()
   })
 
   it('should support create and edit modes', () => {
-    component.dialogMode = EditDialogMode.CREATE
+    component.dialogMode.set(EditDialogMode.CREATE)
     const createTitleSpy = jest.spyOn(component, 'getCreateTitle')
     const editTitleSpy = jest.spyOn(component, 'getEditTitle')
     fixture.detectChanges()
     expect(createTitleSpy).toHaveBeenCalled()
     expect(editTitleSpy).not.toHaveBeenCalled()
-    component.dialogMode = EditDialogMode.EDIT
+    component.dialogMode.set(EditDialogMode.EDIT)
     fixture.detectChanges()
     expect(editTitleSpy).toHaveBeenCalled()
   })
 
   it('should disable data type select on edit', () => {
-    component.dialogMode = EditDialogMode.EDIT
+    component.dialogMode.set(EditDialogMode.EDIT)
     fixture.detectChanges()
     component.ngOnInit()
     expect(component.objectForm.get('data_type').disabled).toBeTruthy()
   })
 
   it('should initialize select options on edit', () => {
-    component.dialogMode = EditDialogMode.EDIT
+    component.dialogMode.set(EditDialogMode.EDIT)
     component.object = {
       id: 1,
       name: 'Field 1',
@@ -93,7 +91,7 @@ describe('CustomFieldEditDialogComponent', () => {
   })
 
   it('should support add / remove select options', () => {
-    component.dialogMode = EditDialogMode.CREATE
+    component.dialogMode.set(EditDialogMode.CREATE)
     fixture.detectChanges()
     component.ngOnInit()
     expect(
@@ -117,7 +115,7 @@ describe('CustomFieldEditDialogComponent', () => {
     const selectOptionInputs = component[
       'selectOptionInputs'
     ] as QueryList<ElementRef>
-    component.dialogMode = EditDialogMode.CREATE
+    component.dialogMode.set(EditDialogMode.CREATE)
     component.objectForm.get('data_type').setValue(CustomFieldDataType.Select)
     component.ngOnInit()
     component.ngAfterViewInit()
@@ -127,7 +125,7 @@ describe('CustomFieldEditDialogComponent', () => {
   })
 
   it('should send all select options including those changed in form on save', () => {
-    component.dialogMode = EditDialogMode.EDIT
+    component.dialogMode.set(EditDialogMode.EDIT)
     component.object = {
       id: 1,
       name: 'Field 1',

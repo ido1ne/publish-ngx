@@ -1,15 +1,13 @@
-import {
-  CdkVirtualScrollViewport,
-  ScrollingModule,
-} from '@angular/cdk/scrolling'
 import { CommonModule } from '@angular/common'
 import {
   ChangeDetectorRef,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
   ViewChild,
   inject,
+  signal,
 } from '@angular/core'
 import { FormsModule, ReactiveFormsModule } from '@angular/forms'
 import { NgbNavModule } from '@ng-bootstrap/ng-bootstrap'
@@ -28,8 +26,6 @@ import { LoadingComponentWithPermissions } from '../../loading-component/loading
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    CdkVirtualScrollViewport,
-    ScrollingModule,
   ],
 })
 export class LogsComponent
@@ -39,19 +35,21 @@ export class LogsComponent
   private logService = inject(LogService)
   private changedetectorRef = inject(ChangeDetectorRef)
 
-  public logs: Array<{ message: string; level: number }> = []
+  readonly logs = signal<Array<{ message: string; level: number }>>([])
 
-  public logFiles: string[] = []
+  readonly logFiles = signal<string[]>([])
 
-  public activeLog: string
+  readonly activeLog = signal<string>(undefined)
 
-  public autoRefreshEnabled: boolean = true
+  readonly autoRefreshEnabled = signal<boolean>(true)
 
-  public limit: number = 5000
+  readonly limit = signal<number>(5000)
+
+  readonly showJumpToBottom = signal<boolean>(false)
 
   private readonly limitChange$ = new Subject<number>()
 
-  @ViewChild('logContainer') logContainer: CdkVirtualScrollViewport
+  @ViewChild('logContainer') logContainer: ElementRef<HTMLElement>
 
   ngOnInit(): void {
     this.limitChange$
@@ -62,15 +60,15 @@ export class LogsComponent
       .list()
       .pipe(takeUntil(this.unsubscribeNotifier))
       .subscribe((result) => {
-        this.logFiles = result
-        this.loading = false
-        if (this.logFiles.length > 0) {
-          this.activeLog = this.logFiles[0]
+        this.logFiles.set(result)
+        this.loading.set(false)
+        if (this.logFiles().length > 0) {
+          this.activeLog.set(this.logFiles()[0])
           this.reloadLogs()
         }
         timer(5000, 5000)
           .pipe(
-            filter(() => this.autoRefreshEnabled),
+            filter(() => this.autoRefreshEnabled()),
             takeUntil(this.unsubscribeNotifier)
           )
           .subscribe(() => {
@@ -88,32 +86,34 @@ export class LogsComponent
   }
 
   reloadLogs() {
-    this.loading = true
+    this.loading.set(true)
+    const shouldStickToBottom = this.isNearBottom()
     this.logService
-      .get(this.activeLog, this.limit)
+      .get(this.activeLog(), this.limit())
       .pipe(takeUntil(this.unsubscribeNotifier))
       .subscribe({
         next: (result) => {
-          this.loading = false
+          this.loading.set(false)
           const parsed = this.parseLogsWithLevel(result)
           const hasChanges =
-            parsed.length !== this.logs.length ||
+            parsed.length !== this.logs().length ||
             parsed.some((log, idx) => {
-              const current = this.logs[idx]
+              const current = this.logs()[idx]
               return (
-                !current ||
-                current.message !== log.message ||
-                current.level !== log.level
+                current?.message !== log.message || current?.level !== log.level
               )
             })
           if (hasChanges) {
-            this.logs = parsed
-            this.scrollToBottom()
+            this.logs.set(parsed)
+            if (shouldStickToBottom) {
+              this.scrollToBottom()
+            }
+            this.showJumpToBottom.set(!shouldStickToBottom)
           }
         },
         error: () => {
-          this.logs = []
-          this.loading = false
+          this.logs.set([])
+          this.loading.set(false)
         },
       })
   }
@@ -142,9 +142,25 @@ export class LogsComponent
   }
 
   scrollToBottom(): void {
-    this.changedetectorRef.detectChanges()
-    if (this.logContainer) {
-      this.logContainer.scrollToIndex(this.logs.length - 1)
+    const viewport = this.logContainer?.nativeElement
+    if (!viewport) {
+      return
     }
+    this.changedetectorRef.detectChanges()
+    viewport.scrollTop = viewport.scrollHeight
+    this.showJumpToBottom.set(false)
+  }
+
+  private isNearBottom(): boolean {
+    if (!this.logContainer?.nativeElement) return true
+    const distanceFromBottom =
+      this.logContainer.nativeElement.scrollHeight -
+      this.logContainer.nativeElement.scrollTop -
+      this.logContainer.nativeElement.clientHeight
+    return distanceFromBottom <= 40
+  }
+
+  onScroll(): void {
+    this.showJumpToBottom.set(!this.isNearBottom())
   }
 }

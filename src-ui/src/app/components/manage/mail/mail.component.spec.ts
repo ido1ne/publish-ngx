@@ -23,7 +23,6 @@ import { IfOwnerDirective } from 'src/app/directives/if-owner.directive'
 import { IfPermissionsDirective } from 'src/app/directives/if-permissions.directive'
 import { PermissionsGuard } from 'src/app/guards/permissions.guard'
 import { CustomDatePipe } from 'src/app/pipes/custom-date.pipe'
-import { SafeHtmlPipe } from 'src/app/pipes/safehtml.pipe'
 import { PermissionsService } from 'src/app/services/permissions.service'
 import { MailAccountService } from 'src/app/services/rest/mail-account.service'
 import { MailRuleService } from 'src/app/services/rest/mail-rule.service'
@@ -84,7 +83,6 @@ describe('MailComponent', () => {
         CustomDatePipe,
         ConfirmDialogComponent,
         CheckComponent,
-        SafeHtmlPipe,
         SelectComponent,
         TextComponent,
         PasswordComponent,
@@ -115,7 +113,7 @@ describe('MailComponent', () => {
     permissionsService = TestBed.inject(PermissionsService)
     activatedRoute = TestBed.inject(ActivatedRoute)
     settingsService = TestBed.inject(SettingsService)
-    settingsService.currentUser = { id: 1 }
+    settingsService.currentUser.set({ id: 1 })
     jest.spyOn(permissionsService, 'currentUserCan').mockReturnValue(true)
     jest
       .spyOn(permissionsService, 'currentUserHasObjectPermissions')
@@ -263,7 +261,7 @@ describe('MailComponent', () => {
     const editDialog = modal.componentInstance as MailRuleEditDialogComponent
     expect(editDialog.object.id).toBeNull()
     expect(editDialog.object.name).toEqual(`${mailRules[0].name} (copy)`)
-    expect(editDialog.dialogMode).toEqual(EditDialogMode.CREATE)
+    expect(editDialog.dialogMode()).toEqual(EditDialogMode.CREATE)
   })
 
   it('should support delete mail rule, show error if needed', () => {
@@ -416,6 +414,6 @@ describe('MailComponent', () => {
     modalService.activeInstances.subscribe((refs) => (modal = refs[0]))
     component.viewProcessedMail(mailRules[0] as MailRule)
     const dialog = modal.componentInstance as any
-    expect(dialog.rule).toEqual(mailRules[0])
+    expect(dialog.rule()).toEqual(mailRules[0])
   })
 })

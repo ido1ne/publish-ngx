@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing'
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap'
 import { Subject } from 'rxjs'
-import { SafeHtmlPipe } from 'src/app/pipes/safehtml.pipe'
 import { ConfirmDialogComponent } from './confirm-dialog.component'
 
 describe('ConfirmDialogComponent', () => {
@@ -11,8 +10,8 @@ describe('ConfirmDialogComponent', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      providers: [NgbActiveModal, SafeHtmlPipe],
-      imports: [ConfirmDialogComponent, SafeHtmlPipe],
+      providers: [NgbActiveModal],
+      imports: [ConfirmDialogComponent],
     }).compileComponents()
 
     modal = TestBed.inject(NgbActiveModal)
@@ -63,6 +62,22 @@ describe('ConfirmDialogComponent', () => {
     component.confirm()
     expect(confirmClickedResult).toBeTruthy()
     expect(confirmSubjectResult).toBeTruthy()
+  })
+
+  it('should re-render the buttons when they are toggled from outside', async () => {
+    const confirmButton: HTMLButtonElement =
+      fixture.nativeElement.querySelectorAll('.modal-footer button')[1]
+    expect(confirmButton.disabled).toBeFalsy()
+
+    // Deliberately no detectChanges: a request callback toggling this is all
+    // that happens, and nothing else schedules a render for the modal
+    component.buttonsEnabled.set(false)
+    await fixture.whenStable()
+    expect(confirmButton.disabled).toBeTruthy()
+
+    component.buttonsEnabled.set(true)
+    await fixture.whenStable()
+    expect(confirmButton.disabled).toBeFalsy()
   })
 
   it('should support cancel & close modal', () => {
